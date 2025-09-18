@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
 
 // Free-standing functions
@@ -16,6 +17,10 @@ fn string_identity(s: String) -> String {
 
 fn hash_map_identity(h: HashMap<String, String>) -> HashMap<String, String> {
     h
+}
+
+fn object_map_identity(m: HashMap<Arc<MyHashSet>, u32>) -> HashMap<Arc<MyHashSet>, u32> {
+    m
 }
 
 fn byte_to_u32(byte: u8) -> u32 {
@@ -56,6 +61,20 @@ impl MyHashSet {
 
     pub fn contains(&self, value: String) -> bool {
         self.inner.lock().unwrap().contains(&value)
+    }
+}
+
+impl PartialEq for MyHashSet {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self, other)
+    }
+}
+
+impl Eq for MyHashSet {}
+
+impl Hash for MyHashSet {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        (self as *const Self as usize).hash(state);
     }
 }
 
