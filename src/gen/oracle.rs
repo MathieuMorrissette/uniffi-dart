@@ -471,7 +471,7 @@ impl DartCodeOracle {
                             outReturn.ref = toRustBuffer(Uint8List.fromList([0]));
                         } else {
                             final lowered = $lowered.lower(result);
-                            final buffer = Uint8List(1 + lowered.length);
+                            final buffer = Uint8List(1 + lowered.len);
                             buffer[0] = 1;
                             buffer.setAll(1, lowered.asUint8List());
                             outReturn.ref = toRustBuffer(buffer);
