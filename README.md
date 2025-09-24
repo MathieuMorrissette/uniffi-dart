@@ -4,10 +4,6 @@ Dart frontend for UniFFI bindings
 
 ![License: MIT](https://img.shields.io/github/license/acterglobal/uniffi-dart?style=flat-square) ![Status: experimental](https://img.shields.io/badge/status-experimental-red?style=flat-square)
 
-## MSRV: 1.75
-
-This project must always work on latest stable rust + version before. We are also testing it against 1.1.70.0 , which we consider the Minimum Support Rust Version (MSRV) at this point. Rust lower than that will probably not compile the project.
-
 ## Testing & Fixtures
 
 uniffi-dart includes a **comprehensive test suite** with 30 fixtures covering all major UniFFI functionality:
