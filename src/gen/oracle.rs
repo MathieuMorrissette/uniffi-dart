@@ -592,7 +592,7 @@ impl DartCodeOracle {
 
     pub fn object_interface_name(_ci: &ComponentInterface, obj: &Object) -> String {
         let class_name = Self::class_name(obj.name());
-        if obj.has_callback_interface() {
+        if obj.has_callback_interface() || obj.is_trait_interface() {
             class_name
         } else {
             format!("{class_name}Interface")
@@ -602,7 +602,7 @@ impl DartCodeOracle {
     pub fn trait_interface_name(ci: &ComponentInterface, name: &str) -> String {
         if let Some(obj) = ci.get_object_definition(name) {
             let class_name = Self::class_name(obj.name());
-            if obj.has_callback_interface() {
+            if obj.has_callback_interface() || obj.is_trait_interface() {
                 class_name
             } else {
                 Self::object_interface_name(ci, obj)

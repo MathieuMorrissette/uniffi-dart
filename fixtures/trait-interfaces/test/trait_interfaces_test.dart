@@ -3,15 +3,14 @@ import '../trait_interfaces.dart';
 
 void main() {
   group('FriendlyGreeter', () {
-    test('implements generated interface', () {
-      final greeter = FriendlyGreeter('Hello');
-      expect(greeter is FriendlyGreeterInterface, isTrue);
-
-      final FriendlyGreeterInterface iface = greeter;
-      expect(iface.greet('World'), equals('Hello World'));
+    test('toTrait produces a Greeter handle', () {
+      final friendly = FriendlyGreeter('Hello');
+      final Greeter greeter = friendly.toTrait();
+      expect(greeter.greet('World'), equals('Hello World'));
+      greeter.dispose();
     });
 
-    test('equality and hashing honour trait implementations', () {
+    test('equality and hashing honour Rust traits', () {
       final a = FriendlyGreeter('Hi');
       final b = FriendlyGreeter('Hi');
       final c = FriendlyGreeter('Hey');
@@ -25,11 +24,18 @@ void main() {
     });
   });
 
-  group('ProcFriendlyGreeter', () {
-    test('proc-macro object honours traits and methods', () {
-      final greeter = ProcFriendlyGreeter('hola');
-      expect(greeter.greet('mundo'), equals('HOLA MUNDO'));
-      expect(greeter.toString(), equals('ProcFriendlyGreeter(hola)'));
+  group('Registry', () {
+    test('returns Greeter trait objects', () {
+      final registry = Registry();
+
+      final Greeter friendly = registry.makeFriendly('Hi');
+      final Greeter proc = registry.makeProc('hola');
+
+      expect(friendly.greet('there'), equals('Hi there'));
+      expect(proc.greet('mundo'), equals('HOLA MUNDO'));
+
+      friendly.dispose();
+      proc.dispose();
     });
   });
 }

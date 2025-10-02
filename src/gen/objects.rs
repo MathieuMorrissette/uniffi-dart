@@ -88,6 +88,8 @@ pub fn generate_object(obj: &Object, type_helper: &dyn TypeHelperRenderer) -> da
             $functions
             $vtable_init
         );
+    } else if obj.is_trait_interface() {
+        return generate_trait_object(obj, type_helper);
     }
 
     let cls_name = &DartCodeOracle::class_name(obj.name());
@@ -174,7 +176,9 @@ pub fn generate_object(obj: &Object, type_helper: &dyn TypeHelperRenderer) -> da
     };
 
     let mut implements: Vec<String> = Vec::new();
-    implements.push(interface_name.clone());
+    if !obj.is_trait_interface() {
+        implements.push(interface_name.clone());
+    }
     if is_error_interface && !implements.iter().any(|entry| entry == "Exception") {
         implements.push("Exception".to_string());
     }
@@ -460,6 +464,90 @@ fn trait_method_call(
                 );
             }, $error_handler)
         )
+    }
+}
+
+fn generate_trait_object(obj: &Object, type_helper: &dyn TypeHelperRenderer) -> dart::Tokens {
+    type_helper.include_once_check(obj.name(), &obj.as_type());
+
+    let cls_name = &DartCodeOracle::class_name(obj.name());
+    let impl_name = format!("_{cls_name}Impl");
+    let finalizer_field = format!("_{cls_name}ImplFinalizer");
+    let lib_instance = &DartCodeOracle::find_lib_instance();
+    let ffi_object_free_name = obj.ffi_object_free().name();
+    let ffi_object_clone_name = obj.ffi_object_clone().name();
+
+    let abstract_methods = obj
+        .methods()
+        .into_iter()
+        .map(|method| generate_interface_method(method, type_helper));
+
+    let concrete_methods = obj
+        .methods()
+        .into_iter()
+        .map(|method| generate_method(method, type_helper));
+
+    quote! {
+        abstract class $cls_name {
+            factory $cls_name.lift(Pointer<Void> ptr) => $(&impl_name)._internal(ptr);
+
+            static Pointer<Void> lower($cls_name value) {
+                if (value is $(&impl_name)) {
+                    return value.uniffiClonePointer();
+                }
+                throw UnsupportedError("Only Rust-implemented $cls_name values are supported.");
+            }
+
+            static int allocationSize($cls_name value) {
+                if (value is $(&impl_name)) {
+                    return $(&impl_name).allocationSize(value);
+                }
+                throw UnsupportedError("Only Rust-implemented $cls_name values are supported.");
+            }
+
+            static LiftRetVal<$cls_name> read(Uint8List buf) {
+                final handle = buf.buffer.asByteData(buf.offsetInBytes).getInt64(0);
+                final pointer = Pointer<Void>.fromAddress(handle);
+                return LiftRetVal($cls_name.lift(pointer), 8);
+            }
+
+            static int write($cls_name value, Uint8List buf) {
+                final handle = lower(value);
+                buf.buffer.asByteData(buf.offsetInBytes).setInt64(0, handle.address);
+                return 8;
+            }
+
+            void dispose();
+
+            $(for method in abstract_methods => $method)
+        }
+
+        final class $(&impl_name) implements $cls_name {
+            $(&impl_name)._internal(this._ptr) {
+                $(&finalizer_field).attach(this, _ptr, detach: this);
+            }
+
+            static final Finalizer<Pointer<Void>> $(&finalizer_field) =
+                Finalizer<Pointer<Void>>((ptr) {
+                    rustCall((status) => $lib_instance.$ffi_object_free_name(ptr, status));
+                });
+
+            Pointer<Void> _ptr;
+
+            static int allocationSize($(&impl_name) _) => 8;
+
+            Pointer<Void> uniffiClonePointer() {
+                return rustCall((status) => $lib_instance.$ffi_object_clone_name(_ptr, status));
+            }
+
+            @override
+            void dispose() {
+                $(&finalizer_field).detach(this);
+                rustCall((status) => $lib_instance.$ffi_object_free_name(_ptr, status));
+            }
+
+            $(for method in concrete_methods => $method)
+        }
     }
 }
 
