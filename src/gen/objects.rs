@@ -46,7 +46,7 @@ impl CodeType for ObjectCodeType {
         match self.imp {
             ObjectImpl::Struct => self.canonical_name().to_string(), // Objects will use factory methods
             ObjectImpl::CallbackTrait => format!("FfiConverterCallbackInterface{}", self.id),
-            ObjectImpl::Trait => todo!("trait objects not supported"),
+            ObjectImpl::Trait => self.canonical_name().to_string(),
         }
     }
 }
@@ -91,6 +91,8 @@ pub fn generate_object(obj: &Object, type_helper: &dyn TypeHelperRenderer) -> da
     }
 
     let cls_name = &DartCodeOracle::class_name(obj.name());
+    let interface_name = DartCodeOracle::object_interface_name(type_helper.get_ci(), obj);
+    let interface_definition = generate_object_interface(obj, &interface_name, type_helper);
     let finalizer_cls_name = &format!("{cls_name}Finalizer");
     let lib_instance = &DartCodeOracle::find_lib_instance();
     let ffi_object_free_name = obj.ffi_object_free().name();
@@ -171,10 +173,24 @@ pub fn generate_object(obj: &Object, type_helper: &dyn TypeHelperRenderer) -> da
         quote!()
     };
 
-    let implements_exception = if is_error_interface {
-        quote!( implements Exception)
-    } else {
+    let mut implements: Vec<String> = Vec::new();
+    implements.push(interface_name.clone());
+    if is_error_interface && !implements.iter().any(|entry| entry == "Exception") {
+        implements.push("Exception".to_string());
+    }
+
+    for trait_impl in obj.trait_impls() {
+        let trait_iface =
+            DartCodeOracle::trait_interface_name(type_helper.get_ci(), &trait_impl.trait_name);
+        if !implements.contains(&trait_iface) {
+            implements.push(trait_iface);
+        }
+    }
+
+    let implements_clause = if implements.is_empty() {
         quote!()
+    } else {
+        quote!( implements $(for imp in implements.iter() join (, ) => $(imp)))
     };
 
     // Generate toString() method for error interfaces
@@ -200,11 +216,13 @@ pub fn generate_object(obj: &Object, type_helper: &dyn TypeHelperRenderer) -> da
     let trait_methods = generate_trait_helpers(obj, type_helper);
 
     quote! {
+        $interface_definition
+
         final _$finalizer_cls_name = Finalizer<Pointer<Void>>((ptr) {
           rustCall((status) => $lib_instance.$ffi_object_free_name(ptr, status));
         });
 
-        class $cls_name $implements_exception {
+        class $cls_name $implements_clause {
             late final Pointer<Void> _ptr;
 
             // Private constructor for internal use / lift
@@ -442,5 +460,73 @@ fn trait_method_call(
                 );
             }, $error_handler)
         )
+    }
+}
+
+fn generate_object_interface(
+    obj: &Object,
+    interface_name: &str,
+    type_helper: &dyn TypeHelperRenderer,
+) -> dart::Tokens {
+    let method_tokens: Vec<dart::Tokens> = obj
+        .methods()
+        .into_iter()
+        .map(|method| generate_interface_method(method, type_helper))
+        .collect();
+
+    if method_tokens.is_empty() {
+        quote! {
+            abstract class $(interface_name) {}
+        }
+    } else {
+        quote! {
+            abstract class $(interface_name) {
+                $(for method in method_tokens => $method)
+            }
+        }
+    }
+}
+
+fn generate_interface_method(
+    method: &Method,
+    type_helper: &dyn TypeHelperRenderer,
+) -> dart::Tokens {
+    let arg_tokens: Vec<dart::Tokens> = method
+        .arguments()
+        .into_iter()
+        .map(|arg| {
+            let ty = arg.as_renderable().render_type(&arg.as_type(), type_helper);
+            let name = DartCodeOracle::var_name(arg.name());
+            quote!($ty $name)
+        })
+        .collect();
+
+    let params = if arg_tokens.is_empty() {
+        quote!()
+    } else {
+        quote!($(for arg in arg_tokens.iter() join (, ) => $arg))
+    };
+    let ret_type = method_return_type_tokens(method, type_helper);
+    let method_name = DartCodeOracle::fn_name(method.name());
+
+    quote!(
+        $ret_type $method_name($params);
+    )
+}
+
+fn method_return_type_tokens(
+    method: &Method,
+    type_helper: &dyn TypeHelperRenderer,
+) -> dart::Tokens {
+    let base = if let Some(ret) = method.return_type() {
+        ret.as_renderable().render_type(ret, type_helper)
+    } else {
+        quote!(void)
+    };
+
+    if method.is_async() {
+        quote!(Future<$base>)
+    } else {
+        base
     }
 }

@@ -2,7 +2,7 @@ use genco::lang::dart;
 use genco::quote;
 use heck::{ToLowerCamelCase, ToUpperCamelCase};
 use uniffi_bindgen::interface::ffi::ExternalFfiMetadata;
-use uniffi_bindgen::interface::{Argument, ObjectImpl};
+use uniffi_bindgen::interface::{Argument, Object, ObjectImpl};
 
 use crate::gen::CodeType;
 use uniffi_bindgen::interface::{AsType, Callable, FfiType, Type};
@@ -587,6 +587,30 @@ impl DartCodeOracle {
                 quote!(Pointer<Void>.fromAddress($(base_lower)))
             }
             _ => base_lower,
+        }
+    }
+
+    pub fn object_interface_name(_ci: &ComponentInterface, obj: &Object) -> String {
+        let class_name = Self::class_name(obj.name());
+        if obj.has_callback_interface() {
+            class_name
+        } else {
+            format!("{class_name}Interface")
+        }
+    }
+
+    pub fn trait_interface_name(ci: &ComponentInterface, name: &str) -> String {
+        if let Some(obj) = ci.get_object_definition(name) {
+            let class_name = Self::class_name(obj.name());
+            if obj.has_callback_interface() {
+                class_name
+            } else {
+                Self::object_interface_name(ci, obj)
+            }
+        } else if let Some(callback) = ci.get_callback_interface_definition(name) {
+            Self::class_name(callback.name())
+        } else {
+            Self::class_name(name)
         }
     }
 }

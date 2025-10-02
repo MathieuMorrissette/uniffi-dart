@@ -1,0 +1,7 @@
+namespace trait_interfaces {};
+
+[Traits=(Display, Debug, Eq, Hash)]
+interface FriendlyGreeter {
+    constructor(string phrase);
+    string greet(string name);
+};
