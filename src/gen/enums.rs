@@ -68,20 +68,38 @@ pub fn generate_enum(obj: &Enum, type_helper: &dyn TypeHelperRenderer) -> dart::
             }
 
             class $ffi_converter_name {
-                static $dart_cls_name lift( RustBuffer buffer) {
-                    final index = buffer.asUint8List().buffer.asByteData().getInt32(0);
+                static LiftRetVal<$dart_cls_name> read( Uint8List buf) {
+                    final index = buf.buffer.asByteData(buf.offsetInBytes).getInt32(0);
                     switch(index) {
                         $(for (index, variant) in obj.variants().iter().enumerate() =>
                         case $(index + 1):
-                            return $dart_cls_name.$(DartCodeOracle::enum_variant_name(variant.name()));
+                            return LiftRetVal(
+                                $dart_cls_name.$(DartCodeOracle::enum_variant_name(variant.name())),
+                                4,
+                            );
                         )
                         default:
                             throw UniffiInternalError(UniffiInternalError.unexpectedEnumCase, "Unable to determine enum variant");
                     }
                 }
 
+                static $dart_cls_name lift( RustBuffer buffer) {
+                    return $ffi_converter_name.read(buffer.asUint8List()).value;
+                }
+
                 static RustBuffer lower( $dart_cls_name input) {
                     return toRustBuffer(createUint8ListFromInt(input.index + 1));
+                }
+
+                static int allocationSize($dart_cls_name _value) {
+                    return 4;
+                }
+
+                static int write( $dart_cls_name value, Uint8List buf) {
+                    buf.buffer
+                        .asByteData(buf.offsetInBytes)
+                        .setInt32(0, value.index + 1);
+                    return 4;
                 }
             }
         }
