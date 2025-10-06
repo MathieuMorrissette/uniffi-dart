@@ -407,34 +407,8 @@ impl DartCodeOracle {
         arg_name: &str,
         ci: &ComponentInterface,
     ) -> dart::Tokens {
-        match arg_type {
-            Type::Boolean => quote!(int $arg_name),
-            Type::Bytes => quote!(RustBuffer $(arg_name)Buffer),
-            Type::String => quote!(RustBuffer $(arg_name)Buffer),
-            Type::Optional { inner_type } => {
-                if let Type::String = **inner_type {
-                    quote!(RustBuffer $(arg_name)Buffer)
-                } else {
-                    //let type_label = DartCodeOracle::dart_type_label(Some(arg_type));
-                    quote!(RustBuffer $arg_name)
-                }
-            }
-            Type::Sequence { inner_type } => {
-                if let Type::Int32 = **inner_type {
-                    quote!(RustBuffer $(arg_name)Buffer)
-                } else {
-                    //let type_label = DartCodeOracle::dart_type_label(Some(arg_type));
-                    quote!(RustBuffer $arg_name)
-                }
-            }
-            Type::Record { module_path, .. } => {
-                quote!($(Self::rust_buffer_name_with_path(module_path, ci)) $arg_name)
-            }
-            _ => {
-                let type_label = DartCodeOracle::dart_type_label(Some(arg_type));
-                quote!($type_label $arg_name)
-            }
-        }
+        let type_label = DartCodeOracle::native_dart_type_label(Some(arg_type), ci);
+        quote!($type_label $arg_name)
     }
 
     // Method to generate code for handling callback return values
@@ -543,20 +517,23 @@ impl DartCodeOracle {
         // Use index-based variable names to avoid conflicts
         if let Type::Boolean = arg_type {
             quote!(final bool_arg$(arg_idx) = $arg_name == 1;)
+        } else if let Type::Enum { .. } = arg_type {
+            let converter = arg_type.as_codetype().ffi_converter_name();
+            quote!(final arg$(arg_idx) = $converter.read(createUint8ListFromInt($arg_name)).value;)
         } else if let Type::Bytes = arg_type {
-            quote!(final arg$(arg_idx) = FfiConverterUint8List.lift($(arg_name)Buffer);)
+            quote!(final arg$(arg_idx) = FfiConverterUint8List.lift($arg_name);)
         } else if let Type::String = arg_type {
-            quote!(final arg$(arg_idx) = FfiConverterString.lift($(arg_name)Buffer);)
+            quote!(final arg$(arg_idx) = FfiConverterString.lift($arg_name);)
         } else if let Type::Optional { inner_type } = arg_type {
             if let Type::String = **inner_type {
-                quote!(final arg$(arg_idx) = FfiConverterOptionalString.lift($(arg_name)Buffer);)
+                quote!(final arg$(arg_idx) = FfiConverterOptionalString.lift($arg_name);)
             } else {
                 let converter = arg_type.as_codetype().ffi_converter_name();
                 quote!(final arg$(arg_idx) = $converter.lift($arg_name);)
             }
         } else if let Type::Sequence { inner_type } = arg_type {
             if let Type::Int32 = **inner_type {
-                quote!(final arg$(arg_idx) = FfiConverterSequenceInt32.lift($(arg_name)Buffer);)
+                quote!(final arg$(arg_idx) = FfiConverterSequenceInt32.lift($arg_name);)
             } else {
                 let converter = arg_type.as_codetype().ffi_converter_name();
                 quote!(final arg$(arg_idx) = $converter.lift($arg_name);)
