@@ -95,6 +95,13 @@ pub fn generate_callback_interface(
         class $ffi_conv_name {
             static final _handleMap = UniffiHandleMap<$cls_name>();
             static bool _vtableInitialized = false;
+            
+            static final _callbackFinalizer = Finalizer<int>((handle) {
+                try {
+                    _handleMap.remove(handle);
+                } catch (e) {
+                }
+            });
 
             static $cls_name lift(int handle) {
                 return _handleMap.get(handle);
@@ -102,7 +109,10 @@ pub fn generate_callback_interface(
 
             static int lower($cls_name value) {
                 _ensureVTableInitialized();
-                return _handleMap.insert(value);
+                final handle = _handleMap.insert(value);
+                
+                _callbackFinalizer.attach(value, handle, detach: value);
+                return handle;
             }
 
             static void _ensureVTableInitialized() {

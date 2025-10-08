@@ -261,6 +261,17 @@ impl Renderer<(FunctionDefinition, dart::Tokens)> for TypeHelpersRenderer<'_> {
                 Exception lift(RustBuffer errorBuf);
             }
 
+            // Finalizer for automatic RustBuffer cleanup
+            final _rustBufferFinalizer = Finalizer<RustBuffer>((buffer) {
+                if (buffer.data.address != 0 && buffer.len > 0) {
+                    try {
+                        rustCall((status) => $(DartCodeOracle::find_lib_instance()).$(self.ci.ffi_rustbuffer_free().name())(buffer, status));
+                    } catch (e) {
+                        
+                    }
+                }
+            });
+
             final class RustBuffer extends Struct {
                 @Uint64()
                 external int capacity;
@@ -271,11 +282,15 @@ impl Renderer<(FunctionDefinition, dart::Tokens)> for TypeHelpersRenderer<'_> {
                 external Pointer<Uint8> data;
 
                 static RustBuffer alloc(int size) {
-                    return rustCall((status) => $(DartCodeOracle::find_lib_instance()).$(self.ci.ffi_rustbuffer_alloc().name())(size, status));
+                    final buffer = rustCall((status) => $(DartCodeOracle::find_lib_instance()).$(self.ci.ffi_rustbuffer_alloc().name())(size, status));
+                    _rustBufferFinalizer.attach(buffer, buffer, detach: buffer);
+                    return buffer;
                 }
 
                 static RustBuffer fromBytes(ForeignBytes bytes) {
-                    return rustCall((status) => $(DartCodeOracle::find_lib_instance()).$(self.ci.ffi_rustbuffer_from_bytes().name())(bytes, status));
+                    final buffer = rustCall((status) => $(DartCodeOracle::find_lib_instance()).$(self.ci.ffi_rustbuffer_from_bytes().name())(bytes, status));
+                    _rustBufferFinalizer.attach(buffer, buffer, detach: buffer);
+                    return buffer;
                 }
 
                 // static RustBuffer from(Pointer<Uint8> bytes, int len) {
@@ -284,6 +299,7 @@ impl Renderer<(FunctionDefinition, dart::Tokens)> for TypeHelpersRenderer<'_> {
                 // }
 
                 void free() {
+                    _rustBufferFinalizer.detach(this);
                     rustCall((status) => $(DartCodeOracle::find_lib_instance()).$(self.ci.ffi_rustbuffer_free().name())(this, status));
                 }
 
