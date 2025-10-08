@@ -286,7 +286,11 @@ impl Renderer<(FunctionDefinition, dart::Tokens)> for TypeHelpersRenderer<'_> {
                 final bytes = calloc<ForeignBytes>();
                 bytes.ref.len = length;
                 bytes.ref.data = frameData;
-                return RustBuffer.fromBytes(bytes.ref);
+                try {
+                    return RustBuffer.fromBytes(bytes.ref);
+                } finally {
+                    calloc.free(bytes);
+                }
             }
 
             final class ForeignBytes extends Struct {
