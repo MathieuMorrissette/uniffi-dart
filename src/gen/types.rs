@@ -319,10 +319,56 @@ impl Renderer<(FunctionDefinition, dart::Tokens)> for TypeHelpersRenderer<'_> {
                 }
             }
 
+            // Buffer pool for frequently used buffer sizes to reduce allocation overhead
+            class _BufferPool {
+                static const List<int> _poolSizes = [64, 256, 1024, 4096, 16384];
+                static const int _maxPoolsPerSize = 4; 
+                static final Map<int, List<Pointer<Uint8>>> _pools = {};
+                
+                static Pointer<Uint8> acquire(int size) {
+                    int? poolSize;
+                    for (final ps in _poolSizes) {
+                        if (ps >= size) {
+                            poolSize = ps;
+                            break;
+                        }
+                    }
+                    
+                    if (poolSize != null) {
+                        final pool = _pools[poolSize] ??= <Pointer<Uint8>>[];
+                        if (pool.isNotEmpty) {
+                            return pool.removeLast();
+                        }
+                    }
+                    
+                    return calloc<Uint8>(size);
+                }
+                
+                static void release(Pointer<Uint8> ptr, int size) {
+                    int? poolSize;
+                    for (final ps in _poolSizes) {
+                        if (ps >= size) {
+                            poolSize = ps;
+                            break;
+                        }
+                    }
+                    
+                    if (poolSize != null) {
+                        final pool = _pools[poolSize] ??= <Pointer<Uint8>>[];
+                        if (pool.length < _maxPoolsPerSize) {
+                            pool.add(ptr);
+                            return;
+                        }
+                    }
+                    
+                    calloc.free(ptr);
+                }
+            }
+
             RustBuffer toRustBuffer(Uint8List data) {
                 final length = data.length;
 
-                final Pointer<Uint8> frameData = calloc<Uint8>(length);
+                final Pointer<Uint8> frameData = _BufferPool.acquire(length);
                 
                 if (length > 0) {
                     final pointerList = frameData.asTypedList(length);
@@ -363,10 +409,6 @@ impl Renderer<(FunctionDefinition, dart::Tokens)> for TypeHelpersRenderer<'_> {
                 //   dataList.setAll(0, typedData);
                 //   return ForeignBytes(len: typedData.length, data: data);
                 // }
-
-                void free() {
-                calloc.free(data);
-                }
             }
 
             class LiftRetVal<T> {
