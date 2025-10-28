@@ -17,7 +17,7 @@ pub struct CompileSource {
 }
 
 /// Test execution options
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct TestConfig {
     /// Custom output directory for test files
     pub custom_output_dir: Option<Utf8PathBuf>,
@@ -25,6 +25,16 @@ pub struct TestConfig {
     pub no_delete: bool,
     /// Delay in seconds after test failure (0 = no delay; None = default)
     pub failure_delay_secs: Option<u64>,
+}
+
+impl Default for TestConfig {
+    fn default() -> Self {
+        Self {
+            custom_output_dir: None,
+            no_delete: false,
+            failure_delay_secs: None,
+        }
+    }
 }
 
 impl TestConfig {
@@ -93,10 +103,8 @@ pub fn run_test_with_output_dir(
     config_path: Option<&str>,
     custom_output_dir: Option<&Utf8Path>,
 ) -> Result<()> {
-    let config = TestConfig {
-        custom_output_dir: custom_output_dir.map(|p| p.to_owned()),
-        ..Default::default()
-    };
+    let mut config = TestConfig::default();
+    config.custom_output_dir = custom_output_dir.map(|p| p.to_owned());
     run_test_impl(fixture, udl_path, config_path, &config)
 }
 
@@ -151,7 +159,7 @@ fn run_test_impl(
     }
 
     let mut pubspec = File::create(out_dir.join("pubspec.yaml"))?;
-    pubspec.write_all(
+    pubspec.write(
         b"
     name: uniffi_test
     description: testing module for uniffi
