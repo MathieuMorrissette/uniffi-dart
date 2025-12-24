@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:test/test.dart';
 import '../proc_macro_pure_uniffi.dart';
 
@@ -51,6 +52,36 @@ void main() {
       counter2.increment();
       expect(counter1.getValue(), equals(11));
       expect(counter2.getValue(), equals(22));
+    });
+  });
+
+  group('Default parameter tests', () {
+    test('hash with all defaults', () {
+      final data = Uint8List.fromList([1, 2, 3, 4, 5]);
+      final result = hashData(data);
+      expect(result, isNotNull);
+      expect(result.length, equals(32)); // default length
+    });
+
+    test('hash with custom iterations', () {
+      final data = Uint8List.fromList([1, 2, 3, 4, 5]);
+      final result = hashData(data, iterations: 5000);
+      expect(result, isNotNull);
+      expect(result.length, equals(32)); // default length
+    });
+
+    test('hash with custom length', () {
+      final data = Uint8List.fromList([1, 2, 3, 4, 5]);
+      final result = hashData(data, length: 64);
+      expect(result, isNotNull);
+      expect(result.length, equals(64)); // custom length
+    });
+
+    test('hash with all parameters specified', () {
+      final data = Uint8List.fromList([1, 2, 3, 4, 5]);
+      final result = hashData(data, iterations: 5000, length: 16);
+      expect(result, isNotNull);
+      expect(result.length, equals(16)); // custom length
     });
   });
 }

@@ -3,6 +3,7 @@ use genco::quote;
 use heck::{ToLowerCamelCase, ToUpperCamelCase};
 use uniffi_bindgen::interface::ffi::ExternalFfiMetadata;
 use uniffi_bindgen::interface::{Argument, Object, ObjectImpl};
+use uniffi_meta::{DefaultValueMetadata, LiteralMetadata};
 
 use crate::gen::CodeType;
 use uniffi_bindgen::interface::{AsType, Callable, FfiType, Type};
@@ -67,6 +68,35 @@ impl DartCodeOracle {
     /// Get the idiomatic Dart rendering of an individual enum variant.
     pub fn enum_variant_name(nm: &str) -> String {
         Self::sanitize_identifier(&nm.to_lower_camel_case())
+    }
+
+    /// Convert a LiteralMetadata value to Dart syntax
+    pub fn render_literal(literal: &LiteralMetadata) -> String {
+        match literal {
+            LiteralMetadata::Boolean(v) => v.to_string(),
+            LiteralMetadata::String(v) => format!("'{}'", v.replace('\'', "\\'")),
+            LiteralMetadata::UInt(v, ..) => v.to_string(),
+            LiteralMetadata::Int(v, ..) => v.to_string(),
+            LiteralMetadata::Float(v, ..) => v.clone(),
+            LiteralMetadata::Enum(name, type_) => {
+                let enum_name = match type_ {
+                    uniffi_meta::Type::Enum { name, .. } => name,
+                    _ => panic!("Expected Enum type for enum literal"),
+                };
+                format!(
+                    "{}.{}",
+                    Self::class_name(enum_name),
+                    Self::enum_variant_name(name)
+                )
+            }
+            LiteralMetadata::EmptySequence => "[]".to_string(),
+            LiteralMetadata::EmptyMap => "{}".to_string(),
+            LiteralMetadata::None => "null".to_string(),
+            LiteralMetadata::Some { inner } => match &**inner {
+                DefaultValueMetadata::Literal(lit) => Self::render_literal(lit),
+                DefaultValueMetadata::Default => "null".to_string(),
+            }
+        }
     }
 
     /// Get the idiomatic Dart rendering of an FFI callback function name

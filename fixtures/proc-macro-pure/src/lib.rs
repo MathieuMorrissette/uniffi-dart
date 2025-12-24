@@ -33,6 +33,20 @@ pub fn status_to_string(user_status: UserStatus) -> String {
     }
 }
 
+#[uniffi::export(default(iterations = 10000, length = 32))]
+pub fn hash_data(data: Option<Vec<u8>>, iterations: u32, length: u32) -> Vec<u8> {
+    // Simple mock implementation for testing
+    let mut result = vec![0u8; length as usize];
+    for i in 0..iterations.min(result.len() as u32) {
+        if let Some(d) = data.as_ref() {
+            if let Some(&b) = d.get(i as usize % d.len()) {
+                result[i as usize] = b.wrapping_add(i as u8);
+            }
+        }
+    }
+    result
+}
+
 use std::sync::Mutex;
 
 #[derive(uniffi::Object)]

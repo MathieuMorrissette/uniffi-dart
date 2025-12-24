@@ -166,40 +166,48 @@ fn generate_udl_mode(
 
 fn find_library_for_udl(udl_path: &Utf8Path) -> Option<Utf8PathBuf> {
     // Look for a compiled library in typical build locations
-    // Priority: 1. Same directory as UDL 2. target/release 3. target/debug
+    // Search up the directory tree to find workspace/crate root with Cargo.toml
 
     let udl_dir = udl_path.parent()?;
     let udl_stem = udl_path.file_stem()?;
 
-    // Convert snake_case UDL name to crate name format
-    let lib_name = udl_stem.replace('_', "-");
+    // Try both naming conventions
+    let lib_names = vec![
+        udl_stem.to_string(), // snake_case (e.g., devolutions_crypto)
+        udl_stem.replace('_', "-"), // kebab-case (e.g., devolutions-crypto)
+    ];
 
-    // Check same directory as UDL
-    for ext in &["dll", "so", "dylib"] {
-        let lib_path = udl_dir.join(format!("{}.{}", lib_name, ext));
-        if lib_path.exists() {
-            return Some(lib_path);
-        }
-    }
-
-    // Try to find Cargo.toml and check target directories
+    // Traverse up to find all Cargo.toml files (both crate and workspace)
     let mut current = udl_dir;
+    let mut candidate_roots = Vec::new();
+
     while let Some(parent) = current.parent() {
         let cargo_toml = parent.join("Cargo.toml");
         if cargo_toml.exists() {
-            // Found project root, check target directories
-            for profile in &["release", "debug"] {
+            candidate_roots.push(parent.to_path_buf());
+        }
+        current = parent;
+    }
+
+    // Check each candidate root for target directory (workspace root first)
+    for root in candidate_roots.iter() {
+        for profile in &["release", "debug"] {
+            for lib_name in &lib_names {
                 for ext in &["dll", "so", "dylib"] {
-                    let lib_path = parent.join("target").join(profile).join(format!("{}.{}", lib_name, ext));
+                    let lib_path = root.join("target").join(profile).join(format!("{}_uniffi.{}", lib_name, ext));
+                    if lib_path.exists() {
+                        println!("Found compiled library for hybrid mode: {}", lib_path);
+                        return Some(lib_path);
+                    }
+                    // Also try without _uniffi suffix
+                    let lib_path = root.join("target").join(profile).join(format!("{}.{}", lib_name, ext));
                     if lib_path.exists() {
                         println!("Found compiled library for hybrid mode: {}", lib_path);
                         return Some(lib_path);
                     }
                 }
             }
-            break;
         }
-        current = parent;
     }
 
     None

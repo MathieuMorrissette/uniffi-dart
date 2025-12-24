@@ -9,7 +9,14 @@ use super::oracle::AsCodeType;
 use super::render::TypeHelperRenderer;
 
 pub fn generate_function(func: &Function, type_helper: &dyn TypeHelperRenderer) -> dart::Tokens {
-    let args = quote!($(for arg in &func.arguments() => $(&arg.as_renderable().render_type(&arg.as_type(), type_helper)) $(DartCodeOracle::var_name(arg.name())),));
+    let arguments = func.arguments();
+    let has_defaults = arguments.iter().any(|arg| arg.default_value().is_some());
+
+    let args = if !has_defaults {
+        quote!($(for arg in &arguments => $(&arg.as_renderable().render_type(&arg.as_type(), type_helper)) $(DartCodeOracle::var_name(arg.name())),))
+    } else {
+        generate_function_args_with_defaults(&arguments, type_helper)
+    };
 
     let (ret, lifter) = if let Some(ret) = func.return_type() {
         (
@@ -80,5 +87,47 @@ pub fn generate_function(func: &Function, type_helper: &dyn TypeHelperRenderer) 
                 );
             }
         )
+    }
+}
+
+fn generate_function_args_with_defaults(
+    arguments: &[&uniffi_bindgen::interface::Argument],
+    type_helper: &dyn TypeHelperRenderer,
+) -> dart::Tokens {
+    let required_args: Vec<_> = arguments
+        .iter()
+        .filter(|arg| arg.default_value().is_none())
+        .copied()
+        .collect();
+    let optional_args: Vec<_> = arguments
+        .iter()
+        .filter(|arg| arg.default_value().is_some())
+        .copied()
+        .collect();
+
+    let mut parts = Vec::new();
+
+    for arg in &required_args {
+        let type_tokens = arg.as_renderable().render_type(&arg.as_type(), type_helper);
+        let name = DartCodeOracle::var_name(arg.name());
+        parts.push(quote!($type_tokens $name));
+    }
+
+    for arg in &optional_args {
+        let type_tokens = arg.as_renderable().render_type(&arg.as_type(), type_helper);
+        let name = DartCodeOracle::var_name(arg.name());
+        if let Some(uniffi_meta::DefaultValueMetadata::Literal(lit)) = arg.default_value() {
+            let default_value = DartCodeOracle::render_literal(lit);
+            parts.push(quote!($type_tokens $name = $default_value));
+        } else {
+            parts.push(quote!($type_tokens $name));
+        }
+    }
+
+    let required_count = required_args.len();
+    if required_count == 0 {
+        quote!({$(for (i, part) in parts.iter().enumerate() => $(if i > 0 => , )$part)})
+    } else {
+        quote!($(for (i, part) in parts[..required_count].iter().enumerate() => $(if i > 0 => , )$part), {$(for (i, part) in parts[required_count..].iter().enumerate() => $(if i > 0 => , )$part)})
     }
 }
