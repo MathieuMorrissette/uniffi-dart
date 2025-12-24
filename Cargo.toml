@@ -9,7 +9,7 @@ rust-version = "1.85"
 
 [features]
 defaults = []
-binary = []
+cli = ["dep:clap"]
 build = ["dep:uniffi_build"]
 bindgen-tests = [
     "dep:uniffi_testing",
@@ -25,7 +25,7 @@ path = "src/lib.rs"
 [[bin]]
 name = "uniffi_bindgen_dart"
 path = "src/bin.rs"
-required-features = ["binary"]
+required-features = ["cli"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -40,6 +40,9 @@ serde = "1"
 toml = "0.9"
 genco = "0.17.5"
 proc-macro2 = "1.0.66"
+
+# CLI dependencies
+clap = { version = "4", features = ["derive"], optional = true }
 
 # feature specific stuff
 uniffi_build = { workspace = true, optional = true }
@@ -71,6 +74,7 @@ members = [
     "fixtures/simple-fns",
     "fixtures/trait-methods",
     "fixtures/trait-interfaces",
+    "fixtures/proc-macro-pure",
     #"fixtures/*",
 ]
 

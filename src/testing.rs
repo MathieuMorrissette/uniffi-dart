@@ -83,7 +83,7 @@ pub fn run_test_with_config(
     config_path: Option<&str>,
     test_config: &TestConfig,
 ) -> Result<()> {
-    run_test_impl(fixture, udl_path, config_path, test_config)
+    run_test_impl(fixture, udl_path, config_path, test_config, false)
 }
 
 /// Run a test with an explicit output directory (convenience wrapper)
@@ -97,7 +97,7 @@ pub fn run_test_with_output_dir(
         custom_output_dir: custom_output_dir.map(|p| p.to_owned()),
         ..Default::default()
     };
-    run_test_impl(fixture, udl_path, config_path, &config)
+    run_test_impl(fixture, udl_path, config_path, &config, false)
 }
 
 /// Test execution (core implementation)
@@ -106,6 +106,7 @@ fn run_test_impl(
     udl_path: &str,
     config_path: Option<&str>,
     test_config: &TestConfig,
+    library_mode: bool,
 ) -> Result<()> {
     // Resolve project root (cargo may change CWD when running tests)
     let project_root = find_project_root()?;
@@ -253,7 +254,7 @@ void main(List<String> args) async {{
         config_path.as_deref(),
         Some(&out_dir),
         &test_helper.cdylib_path()?,
-        false, // library_mode
+        library_mode,
     )?;
 
     // Copy fixture test files to output directory
@@ -337,4 +338,21 @@ fn find_project_root() -> Result<Utf8PathBuf> {
 
 pub fn get_compile_sources() -> Result<Vec<CompileSource>> {
     todo!("Not implemented")
+}
+
+/// Run a library mode test with default options (env vars honored)
+pub fn run_library_mode_test(fixture: &str, config_path: Option<&str>) -> Result<()> {
+    run_library_mode_test_with_config(fixture, config_path, &TestConfig::from_env())
+}
+
+/// Run a library mode test with explicit configuration
+pub fn run_library_mode_test_with_config(
+    fixture: &str,
+    config_path: Option<&str>,
+    test_config: &TestConfig,
+) -> Result<()> {
+    // In library mode, udl_path is only used for config location fallback
+    // We pass config_path as udl_path (or empty string if no config)
+    let pseudo_udl_path = config_path.unwrap_or("");
+    run_test_impl(fixture, pseudo_udl_path, config_path, test_config, true)
 }
